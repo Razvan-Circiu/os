@@ -1,84 +1,142 @@
-//2 fisiere intrare, 2 iesire. cel de intrare exista. adaug text in el. al 2lea fisier creat in program. parcurgere fisiere si numarat caracterre. afisat count in fisier de iesire
- // + id owner fisier.
+#include "fisiere.h"
 #include <stdio.h>
-#include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <stdlib.h>
+#include <unistd.h>
 
-#define BUFFER_SIZE 100
+char *printMenu(char *name, enum FileType type) {
+  char *options = malloc(32);
+  switch (type) {
+  case REG:
+    printf("\n%s - REGULAR FILE\n", name);
+    printf("--- OPTIONS ---\n");
+    printf("-a: access rights\n");
+    printf("-d: size\n");
+    printf("-h: hard link count\n");
+    printf("-l: create symbolic link\n");
+    printf("-m: last modified\n");
+    printf("-n: name\n");
+    printf("\nPlease give some options (Your input should begin with \'-\'): ");
+    scanf("%s", options);
+    break;
+  case LINK:
+    // TODO after we get the requirements
+    break;
+  case DIR:
+    // TODO after we get the requirements
+    break;
+  }
+  if (!valid(type, options)) {
+    return printMenu(name, type);
+  }
 
-int count = 0;
-
-void statistica(char buffer[], int flag) {
-    for (int i = 0; i < flag; i++) {
-        if (isalnum(buffer[i])) {
-            count += 1;
-        }
-    }
+  return options;
 }
 
-void sciere(int fout) {
-    struct stat fileStat;
-    if (fstat(fout, &fileStat) == -1) {
-        perror("Could not get file status");
-        exit(EXIT_FAILURE);
+int valid(enum FileType type, const char *options) {
+  switch (type) {
+  case REG: {
+    const char regValidFlags[] = "-adhlmn";
+    for (int i = 0; regValidFlags[i] != '\0'; i++) {
+      if (!strchr(regValidFlags, options[i])) {
+        printf("\nINVALID OPTION: \'%c\'!\n\n", options[i]);
+        return 0;
+      }
     }
+    break;
+  }
 
-    char bufferOut[BUFFER_SIZE];
-    sprintf(bufferOut, "malfanum: %d, id_owner: %u", count, fileStat.st_uid);
+  case LINK: {
+    // TODO after we get the requirements
+    break;
+  }
+  case DIR: {
+    // TODO after we get the requirements
+    break;
+  }
+  }
 
-    if (write(fout, bufferOut, strlen(bufferOut)) < 0) {
-        perror("Could not write to file");
-        exit(EXIT_FAILURE);
-    }
+  return 1;
 }
 
-int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        perror("Not enough arguments!");
-        exit(EXIT_FAILURE);
+void parseArgs(int argc, char *argv[]) {
+  for (int i = 1; i < argc; i++) {
+    struct stat st;
+    stat(argv[i], &st);
+    if (S_ISREG(st.st_mode)) {
+      char *options = printMenu(argv[i], REG);
+      runForFile(argv[i], REG, options);
+    } else if (S_ISLNK(st.st_mode)) {
+      char *options = printMenu(argv[i], LINK);
+      runForFile(argv[i], LINK, options);
+    } else if (S_ISDIR(st.st_mode)) {
+      char *options = printMenu(argv[i], DIR);
+      runForFile(argv[i], DIR, options);
     }
-
-    int fileIn = open(argv[1], O_RDONLY);
-    if (fileIn == -1) {
-        perror("Could not open input file");
-        exit(EXIT_FAILURE);
-    }
-
-    int fileOut = open(argv[2], O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
-    if (fileOut == -1) {
-        perror("Could not create output file");
-        exit(EXIT_FAILURE);
-    }
-
-    char buffer[BUFFER_SIZE];
-    ssize_t bytesRead;
-
-    while ((bytesRead = read(fileIn, buffer, BUFFER_SIZE)) > 0) {
-        statistica(buffer, bytesRead);
-        write(fileOut, buffer, bytesRead);
-    }
-
-    if (bytesRead == -1) {
-        perror("Could not read input file");
-        exit(EXIT_FAILURE);
-    }
-
-    sciere(fileOut);
-
-    if (close(fileIn) == -1) {
-        perror("Could not close input file");
-        exit(EXIT_FAILURE);
-    }
-
-    if (close(fileOut) == -1) {
-        perror("Could not close output file");
-        exit(EXIT_FAILURE);
-    }
-
-    return 0;
+  }
 }
+
+void runForFile(char *name, enum FileType type, char *options) {
+  struct stat st;
+  stat(name, &st);
+
+  for (int i = 0; options[i] != '\0'; i++) {
+    switch (type) {
+    case REG:
+      switch (options[i]) {
+      case 'a':
+        printAccRights(st);
+        break;
+      case 'd':
+        printSize(st);
+        break;
+      case 'h':
+        printLinkCnt(st);
+        break;
+      case 'l': {
+        char linkName[256];
+        printf("Please give the link name: ");
+        scanf("%s", linkName);
+        symlink(name, linkName);
+        printf("The link \'%s\' was created.\n", linkName);
+        break;
+      }
+      case 'm':
+        break;
+      case 'n':
+        printf("Name of file: %s\n", name);
+        break;
+      default:
+        break;
+      }
+    case LINK:
+      break;
+    case DIR:
+      break;
+    }
+  }
+}
+
+void printAccRights(struct stat st) {
+  mode_t mode = st.st_mode;
+  printf("\nAccess rights:\n");
+  printf("  User:\n");
+  printf("\tRead - %s\n", mode & S_IRUSR ? "yes" : "no");
+  printf("\tWrite - %s\n", mode & S_IWUSR ? "yes" : "no");
+  printf("\tExecute - %s\n", mode & S_IXUSR ? "yes" : "no");
+  printf("  Group:\n");
+  printf("\tRead - %s\n", mode & S_IRGRP ? "yes" : "no");
+  printf("\tWrite - %s\n", mode & S_IWGRP ? "yes" : "no");
+  printf("\tExecute - %s\n", mode & S_IXGRP ? "yes" : "no");
+  printf("  Others:\n");
+  printf("\tRead - %s\n", mode & S_IROTH ? "yes" : "no");
+  printf("\tWrite - %s\n", mode & S_IWOTH ? "yes" : "no");
+  printf("\tExecute - %s\n", mode & S_IXOTH ? "yes" : "no");
+}
+
+void printLinkCnt(struct stat st) {
+  printf("Hard Link Count: %lu\n", st.st_nlink);
+}
+
+void printSize(struct stat st) { printf("Size: %lu bytes\n", st.st_size); }
